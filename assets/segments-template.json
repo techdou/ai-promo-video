@@ -1,0 +1,24 @@
+{
+  "segments": [
+    {
+      "index": 1,
+      "title": "Shot 1 title (e.g., 开场 hook)",
+      "filename": "01_shot1.wav",
+      "model": "mimo-v2.5-tts",
+      "voice": "冰糖",
+      "format": "wav",
+      "style_instruction": "Speech rate, pauses, emphasis. Example: '沉稳、缓慢、有重量感的开场。语速偏慢（约 0.85x），每句句尾拉长停顿 0.5 秒。重音词用 ▲ 标注。'",
+      "speech_text": "Spoken text for this shot. Pull directly from the Phase 3 voiceover script — one shot per segment. Short sentences, conversational."
+    },
+    {
+      "index": 2,
+      "title": "Shot 2 title",
+      "filename": "02_shot2.wav",
+      "model": "mimo-v2.5-tts",
+      "voice": "冰糖",
+      "format": "wav",
+      "style_instruction": "Per-segment style. Each segment gets its own pacing instructions — parallel content reads slightly faster, transitions slow down.",
+      "speech_text": "Spoken text for shot 2."
+    }
+  ]
+}
