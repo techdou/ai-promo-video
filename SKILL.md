@@ -55,13 +55,18 @@ All deliverables (research reports, copy, scripts, prompts) should be written as
 
 Goal: a structured report on the chosen model's capabilities, prompt conventions, API, pricing, and pitfalls.
 
-1. Ask the user which model (default: `doubao-seedance-1-0-pro-250528`; consider pro fast for budget, avoid lite for brand videos). If the user mentions Sora / Kling / Runway / others, dispatch a research subagent for that model — the report structure in `references/research-template.md` is model-agnostic.
+1. Confirm the user's model or choose by shot using the table below. If the user mentions Sora / Kling / Runway / others, dispatch a research subagent for that model — the report structure in `references/research-template.md` is model-agnostic.
 2. Read `references/research-template.md` for the survey structure.
 3. Dispatch a research subagent (use the `researcher` subagent type) with explicit instructions to cite real URLs and mark "需核实" for unverified claims. Never fabricate prices, API fields, or release dates.
 4. Save the report to `docs/promo/00-{model-slug}-调研报告.md`.
 5. Highlight 3-5 key constraints that will shape later phases (e.g., "model cannot generate reliable text → all captions must be composited in post").
 
-If the target is doubao-seedance, also read `references/seedance-guide.md` — it contains the pre-validated 5-段式 prompt structure, camera vocabulary, and known pitfalls. For other models, the research report from step 4 is the canonical reference.
+| Model | Choose for |
+|---|---|
+| **Seedance 1.5 Pro** | Standard text-to-video or image-to-video promo shots; can generate synchronized audio where supported. |
+| **Seedance 2.0** | Shots that need multimodal image/video/audio references to control appearance, motion, or rhythm, or frame anchors and synchronized audio. |
+
+Choose from models confirmed to work on the actual account and route. If availability is unknown, mark it unverified; a catalog listing is not proof of access. For Seedance, read `references/seedance-guide.md` for model IDs, prompt conventions, and Ark task polling. For other models, use the research report from step 4.
 
 ## Phase 2: Marketing copy
 
@@ -120,7 +125,7 @@ Goal: concrete, copy-pasteable prompts for the chosen video model, one per shot,
 
 **Hard rules for seedance** (these came from real failures):
 
-- 字幕、品牌名、Logo 一律后期合成 — seedance 1.0 text rendering is weak.
+- 字幕、品牌名、Logo 一律后期合成 — generated text is not reliable enough for exact copy or typography.
 - No independent `negative_prompt` field — fold negations into positive constraints ("无文字" not "不要文字").
 - One prompt = one shot. Don't try multi-shot narratives in a single prompt; cut in post.
 - For character consistency across shots, use image-to-video with a first-frame anchor image rather than text-to-video.

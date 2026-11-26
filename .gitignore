@@ -115,3 +115,23 @@ build/
 # ── 系统与临时文件 ──
 desktop.ini
 *.tmp
+
+# ── 私密信息与 API 密钥 ──
+*.env
+secrets/
+*secret*.json
+*token*.json
+*cookies*.json
+
+# ── 本地工具与构建缓存 ──
+.pi/
+*.pyc
+
+# ── 内部文档与开发状态 ──
+devlog/
+NOTES.md
+*-private.md
+*.bak
+*.bak-*
+archive/
+state/

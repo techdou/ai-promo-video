@@ -1,16 +1,15 @@
 # doubao-seedance Prompt & API Guide
 
-> Snapshot: 2026-07-25. Verify pricing and field defaults against the official doc links at the bottom before production runs.
+> Verify model access, accepted fields, and pricing for your endpoint before production. Choose from models confirmed to work on the actual account and route; an advertised model is not proof of access.
 
 ## Model selection
 
-| Version | model ID | When to use |
+| Version | Example model ID (Ark) | When to use |
 |---|---|---|
-| **pro** (recommended) | `doubao-seedance-1-0-pro-250528` | Brand films, multi-shot narratives, 1080p required |
-| **pro fast** | `doubao-seedance-1-0-pro-fast-251015` | Budget-sensitive, 3x speed, 72% cheaper than pro |
-| lite | `doubao-seedance-1-0-lite-*` | Avoid for brand films — single-shot, lower quality |
+| **Seedance 1.5 Pro** | `doubao-seedance-1-5-pro-251215` | Standard text-to-video or image-to-video promo shots; use joint audio/video generation when the endpoint supports it. |
+| **Seedance 2.0** | `doubao-seedance-2-0-260128` | Prefer for shots that need multimodal image/video/audio references (e.g., match product appearance, camera motion, and rhythm); also supports text-to-video, frame anchors, and synchronized audio. |
 
-For promo videos, default to **pro 1080p**. Drop to pro fast only if iteration speed matters more than peak quality.
+Choose by shot and confirmed access, not by version alone. Check the exact model or inference endpoint ID and supported resolution, duration, and reference mode. Use one prompt per shot by default and cut in post.
 
 ## The 5-段式 prompt structure (官方推荐)
 
@@ -48,9 +47,9 @@ Mix Chinese-with-Chinese or English-with-English; do not mix within one prompt (
 
 1. **No independent `negative_prompt` field**. Fold negations into positive constraints: write "干净画面" not "无水印" alone, or append "无文字、无水印、无 logo、人物五指完整" at the end.
 2. **Text rendering is weak**. Captions, brand names, logos, on-screen text — composite all in post. Never ask the model to render the project's brand name or any slogan.
-3. **Multi-shot narratives in one prompt are fragile**. Pro supports it but failure rate is high. Default to one prompt = one shot, cut in post.
+3. **Multi-shot prompts are harder to control**. Even with Seedance 2.0, prefer one prompt per shot when individual cuts need precise control.
 4. **`camera_fixed: true` does not guarantee fixed camera**. The official doc says "效果不保证". For truly fixed shots, write "镜头固定不动，无运镜" explicitly in the prompt.
-5. **No audio in 1.0 series**. 1.5 pro added audio-visual joint generation; 1.0 needs post-production voiceover.
+5. **Audio support is model- and endpoint-dependent**. Seedance 1.5 Pro and 2.0 can generate synchronized audio; keep the final branded voiceover and mix in post when exact timing or wording matters.
 
 ## Consistency techniques
 
@@ -64,36 +63,58 @@ Endpoint: `POST /api/v3/contents/generations/tasks`
 
 | Field | Required | Values |
 |---|---|---|
-| `model` | yes | `doubao-seedance-1-0-pro-250528` |
-| `content` | yes | `[{type:"text", text:"..."}]` + optional `[{type:"image_url", image_url:{url}, role:"first_frame"\|"last_frame"}]` |
-| `ratio` | no | `1:1`/`3:4`/`4:3`/`16:9`/`9:16`/`21:9`/`adaptive`, default `16:9` |
-| `resolution` | no | `480p`/`720p`/`1080p`, default `1080p` |
-| `duration` | no | `5`/`10`, default `5` |
-| `camera_fixed` | no | default `false` |
-| `seed` | no | fix for coherence |
-| `watermark` | no | default `false` |
+| `model` | yes | Enabled model ID or inference endpoint ID; see the selection table. |
+| `content` | yes | Text instructions and any media inputs. `image_url` can carry a `first_frame` or `last_frame` role where supported. For 2.0 multimodal reference mode, use `reference_image`, `reference_video`, or `reference_audio` as appropriate; do not mix that mode with frame anchors. |
+| `ratio`, `resolution`, `duration` | no | Check allowed values and defaults for the selected model and mode. |
+| `generate_audio`, `camera_fixed`, `seed`, `watermark` | no | Send only if the selected model and endpoint support the field. |
 
-Async flow: POST create → GET poll every 10-15s → on `completed`, fetch `content.video_url` (TOS URL, time-limited, download promptly).
+### Task polling
 
-Typical latency: 5s/720p ≈ 40-50s on pro; pro fast ≈ 10s.
+After create returns a task ID, query `GET /api/v3/contents/generations/tasks/{id}` every 10–15 seconds. `queued` and `running` are nonterminal. The four terminal states are:
 
-## Pricing (verify before production)
+| Status | Action |
+|---|---|
+| `succeeded` | Read `content.video_url` and download promptly (the URL expires). Missing URL is a delivery error. |
+| `failed` | Stop and inspect the task error. |
+| `cancelled` | Stop; the task was cancelled. |
+| `expired` | Stop; the task expired. |
 
-- 720p: **¥1.73 / million tokens**
-- 1080p: **¥3.89 / million tokens**
-- Token formula: `tokens = (height × width × FPS × duration) / 1024`
-- Per-shot reference: 1080p/5s ≈ ¥0.94
+The example takes a `get_task(task_id)` callable that returns decoded Ark query JSON. It only queries an existing task; it does not submit a generation request.
 
-Source: <https://www.volcengine.com/docs/82379/1544106> (re-check; pricing adjusts quarterly).
+```python
+from time import sleep
+
+
+def wait_for_video(get_task, task_id, *, max_attempts=60, interval=12):
+    for attempt in range(max_attempts):
+        task = get_task(task_id)
+        status = task.get("status")
+        if status == "succeeded":
+            url = (task.get("content") or {}).get("video_url")
+            if not url:
+                raise RuntimeError(f"Task {task_id} succeeded without content.video_url")
+            return url
+        if status in {"failed", "cancelled", "expired"}:
+            raise RuntimeError(f"Task {task_id} ended with status {status}")
+        if status not in {"queued", "running"}:
+            raise RuntimeError(f"Task {task_id} returned unexpected status {status!r}")
+        if attempt + 1 < max_attempts:
+            sleep(interval)
+    raise TimeoutError(f"Task {task_id} is not terminal; resume polling by task ID")
+```
+
+## Pricing and latency (verify before production)
+
+Check [current Ark pricing](https://www.volcengine.com/docs/82379/1544106) for the selected model and mode, including reference inputs and audio. Do not reuse 1.0 price or latency estimates for 1.5 Pro/2.0.
 
 ## Official documentation
 
-- [Seedance 1.0 提示词指南 — 火山方舟](https://www.volcengine.com/docs/82379/1631633) (中文, JS-rendered, may need login)
-- [Seedance-1.0-pro & pro-fast Prompt Guide — BytePlus ModelArk](https://docs.byteplus.com/en/docs/ModelArk/1631633) (English mirror, same fields)
+- [视频生成 API — 火山方舟](https://www.volcengine.com/docs/82379/1520757)
+- [查询视频生成任务 — 火山方舟](https://www.volcengine.com/docs/82379/1521309)
+- [Seedance 2.0 提示词指南 — 火山方舟](https://www.volcengine.com/docs/82379/2222480)
 - [Seedance SDK 示例](https://www.volcengine.com/docs/82379/2298881)
 - [模型价格](https://www.volcengine.com/docs/82379/1544106)
-- [Seedance 1.0 pro fast 模型页 — BytePlus](https://docs.byteplus.com/en/docs/ModelArk/1901652)
 
 ## Community reference
 
-- `YouMind-OpenLab/awesome-seedance-2-prompts` (GitHub, 5000+ vetted prompts; naming says 2.0 but the 5-段式 structure and camera vocabulary apply to 1.0 pro)
+- `YouMind-OpenLab/awesome-seedance-2-prompts` (GitHub, Seedance 2.0 prompt examples; verify suitability for your shot and model).
